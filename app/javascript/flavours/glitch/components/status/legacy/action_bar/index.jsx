@@ -8,6 +8,7 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
 import { ImmutablePureComponent } from 'react-immutable-pure-component';
 import { connect } from 'react-redux';
 
+import AddReactionIcon from '@/material-icons/400-24px/add_reaction.svg?react';
 import MoreHorizIcon from '@/material-icons/400-24px/more_horiz.svg?react';
 import VisibilityIcon from '@/material-icons/400-24px/visibility.svg?react';
 import { identityContextPropShape, withIdentity } from 'flavours/glitch/identity_context';
@@ -16,7 +17,8 @@ import { accountAdminLink, statusAdminLink } from 'flavours/glitch/utils/backend
 import { WithRouterPropTypes } from 'flavours/glitch/utils/react_router';
 
 import { Dropdown } from '@/flavours/glitch/components/dropdown_menu';
-import { me, quickBoosting } from '@/flavours/glitch/initial_state';
+import EmojiPickerDropdown from '@/flavours/glitch/features/compose/containers/emoji_picker_dropdown_container';
+import { me, maxReactions, quickBoosting } from '@/flavours/glitch/initial_state';
 
 import { IconButton } from '@/flavours/glitch/components/icon_button';
 import { injectIntl } from '@/flavours/glitch/components/intl';
@@ -42,6 +44,7 @@ const baseMessages = defineMessages({
   more: { id: 'status.more', defaultMessage: 'More' },
   replyAll: { id: 'status.replyAll', defaultMessage: 'Reply to thread' },
   favourite: { id: 'status.favourite', defaultMessage: 'Favorite' },
+  react: { id: 'status.react', defaultMessage: 'React' },
   removeFavourite: { id: 'status.remove_favourite', defaultMessage: 'Remove from favorites' },
   bookmark: { id: 'status.bookmark', defaultMessage: 'Bookmark' },
   removeBookmark: { id: 'status.remove_bookmark', defaultMessage: 'Remove bookmark' },
@@ -71,7 +74,7 @@ const redesignMessages = defineMessages({
   removeBookmark: { id: 'status.remove_from_saved', defaultMessage: 'Remove from Saved' },
 });
 
-const messages = isRedesignEnabled() ? {...baseMessages, ...redesignMessages} : baseMessages;
+const messages = isRedesignEnabled() ? { ...baseMessages, ...redesignMessages } : baseMessages;
 
 const mapStateToProps = (state, { status }) => {
   const quotedStatusId = status.getIn(['quote', 'quoted_status']);
@@ -90,6 +93,7 @@ class StatusActionBar extends ImmutablePureComponent {
     contextType: PropTypes.string,
     onReply: PropTypes.func,
     onFavourite: PropTypes.func,
+    onReactionAdd: PropTypes.func,
     onDelete: PropTypes.func,
     onRevokeQuote: PropTypes.func,
     onQuotePolicyChange: PropTypes.func,
@@ -153,6 +157,10 @@ class StatusActionBar extends ImmutablePureComponent {
     } else {
       this.props.onInteractionModal(this.props.status, 'favourite');
     }
+  };
+
+  handleEmojiPick = data => {
+    this.props.onReactionAdd(this.props.status.get('id'), data.native.replace(/:/g, ''), data.imageUrl);
   };
 
   handleBookmarkClick = (e) => {
@@ -228,17 +236,19 @@ class StatusActionBar extends ImmutablePureComponent {
     this.props.onFilter();
   };
 
-  render () {
+  handleNoOp = () => { }; // hack for reaction add button
+
+  render() {
     const { status, statusQuoteState, quotedAccountId, contextType, intl, withDismiss, withCounters, showReplyCount, scrollKey } = this.props;
     const { signedIn, permissions } = this.props.identity;
 
-    const publicStatus       = ['public', 'unlisted'].includes(status.get('visibility'));
-    const pinnableStatus     = ['public', 'unlisted', 'private'].includes(status.get('visibility'));
+    const publicStatus = ['public', 'unlisted'].includes(status.get('visibility'));
+    const pinnableStatus = ['public', 'unlisted', 'private'].includes(status.get('visibility'));
     const mutingConversation = status.get('muted');
-    const account            = status.get('account');
-    const writtenByMe        = status.getIn(['account', 'id']) === me;
-    const isRemote           = status.getIn(['account', 'username']) !== status.getIn(['account', 'acct']);
-    const isQuotingMe        = quotedAccountId === me;
+    const account = status.get('account');
+    const writtenByMe = status.getIn(['account', 'id']) === me;
+    const isRemote = status.getIn(['account', 'username']) !== status.getIn(['account', 'acct']);
+    const isQuotingMe = quotedAccountId === me;
 
     let menu = [];
     let reblogIcon = 'retweet';
@@ -351,6 +361,17 @@ class StatusActionBar extends ImmutablePureComponent {
       </div>
     );
 
+    const canReact = permissions && status.get('reactions').filter(r => r.get('count') > 0 && r.get('me')).size < maxReactions;
+    const reactButton = (
+      <IconButton
+        className='status__action-bar-button'
+        onClick={this.handleNoOp} // EmojiPickerDropdown handles that
+        title={intl.formatMessage(messages.react)}
+        disabled={!canReact}
+        icon='add_reaction'
+        iconComponent={AddReactionIcon}
+      />
+    );
     const bookmarkTitle = intl.formatMessage(status.get('bookmarked') ? messages.removeBookmark : messages.bookmark);
     const favouriteTitle = intl.formatMessage(status.get('favourited') ? messages.removeFavourite : messages.favourite);
 
@@ -376,34 +397,42 @@ class StatusActionBar extends ImmutablePureComponent {
           <IconButton className='status__action-bar-button star-icon' animate active={status.get('favourited')} title={favouriteTitle} icon='star' iconComponent={status.get('favourited') ? StatusLikeActiveIcon : StatusLikeIcon} onClick={this.handleFavouriteClick} counter={withCounters ? status.get('favourites_count') : undefined} />
         </div>
         <div className='status__action-bar__button-wrapper'>
+          {
+            permissions
+              ? <EmojiPickerDropdown className='status__action-bar-button' onPickEmoji={this.handleEmojiPick} button={reactButton} disabled={!canReact} />
+              : reactButton
+          }
+        </div>
+        <div className='status__action-bar__button-wrapper'>
           <IconButton className='status__action-bar-button bookmark-icon' disabled={!signedIn} active={status.get('bookmarked')} title={bookmarkTitle} icon='bookmark' iconComponent={status.get('bookmarked') ? StatusBookmarkActiveIcon : StatusBookmarkIcon} onClick={this.handleBookmarkClick} />
         </div>
 
-        {filterButton}
+      { filterButton }
 
-        <RemoveQuoteHint className='status__action-bar__button-wrapper' canShowHint={shouldShowQuoteRemovalHint}>
-          {(dismissQuoteHint) => (
-            <Dropdown
-              scrollKey={scrollKey}
-              status={status}
-              needsStatusRefresh={quickBoosting && status.get('quote_approval') === null}
-              items={menu}
-              size={18}
-              direction='right'
-              ariaLabel={intl.formatMessage(messages.more)}
-              onOpen={() => {
-                dismissQuoteHint();
-                return true;
-              }}
-            >
-              <IconButton
-                className='status__action-bar__button'
-                icon='ellipsis-h'
-                iconComponent={MoreHorizIcon}
-                title={intl.formatMessage(messages.more)}
-              />
-            </Dropdown>
-          )}
+      < RemoveQuoteHint className = 'status__action-bar__button-wrapper' canShowHint = { shouldShowQuoteRemovalHint } >
+        {(dismissQuoteHint) => (
+          <Dropdown
+            scrollKey={scrollKey}
+            status={status}
+            needsStatusRefresh={quickBoosting && status.get('quote_approval') === null}
+            items={menu}
+            size={18}
+            direction='right'
+            ariaLabel={intl.formatMessage(messages.more)}
+            onOpen={() => {
+              dismissQuoteHint();
+              return true;
+            }}
+          >
+            <IconButton
+              className='status__action-bar__button'
+              icon='ellipsis-h'
+              iconComponent={MoreHorizIcon}
+              title={intl.formatMessage(messages.more)}
+            />
+          </Dropdown>
+        )
+  }
         </RemoveQuoteHint>
 
         <div className='status__action-bar-spacer' />
@@ -412,7 +441,7 @@ class StatusActionBar extends ImmutablePureComponent {
             timestamp={status.get('created_at')}
           />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
         </a>
-      </div>
+      </div >
     );
   }
 
