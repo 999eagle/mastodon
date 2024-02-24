@@ -6,10 +6,10 @@ import { FormattedMessage } from 'react-intl';
 
 import ImmutablePropTypes from 'react-immutable-proptypes';
 
-import AddReactionIcon from '@/material-icons/400-24px/add_reaction.svg?react';
 import EditIcon from '@/material-icons/400-24px/edit.svg?react';
 import HomeIcon from '@/material-icons/400-24px/home-fill.svg?react';
 import InsertChartIcon from '@/material-icons/400-24px/insert_chart.svg?react';
+import MoodIcon from '@/material-icons/400-24px/mood.svg?react';
 import PushPinIcon from '@/material-icons/400-24px/push_pin.svg?react';
 import { LinkedDisplayName } from 'flavours/glitch/components/display_name';
 import { Icon } from 'flavours/glitch/components/icon';
@@ -132,8 +132,8 @@ export default class StatusPrepend extends PureComponent {
       iconComponent = StatusLikeIcon;
       break;
     case 'reaction':
-      iconId = 'add_reaction';
-      iconComponent = AddReactionIcon;
+      iconId = 'mood';
+      iconComponent = MoodIcon;
       break;
     case 'featured':
       iconId = 'thumb-tack';
